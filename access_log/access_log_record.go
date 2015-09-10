@@ -21,6 +21,7 @@ type AccessLogRecord struct {
 	BodyBytesSent        int
 	RequestBytesReceived int
 	ExtraHeadersToLog    []string
+	record               string
 }
 
 func (r *AccessLogRecord) FormatStartedAt() string {
@@ -39,7 +40,7 @@ func (r *AccessLogRecord) ResponseTime() float64 {
 	return float64(r.FinishedAt.UnixNano()-r.StartedAt.UnixNano()) / float64(time.Second)
 }
 
-func (r *AccessLogRecord) makeRecord() *bytes.Buffer {
+func (r *AccessLogRecord) makeRecord() string {
 	b := &bytes.Buffer{}
 	fmt.Fprintf(b, `%s - `, r.Request.Host)
 	fmt.Fprintf(b, `[%s] `, r.FormatStartedAt())
@@ -77,11 +78,20 @@ func (r *AccessLogRecord) makeRecord() *bytes.Buffer {
 	}
 
 	fmt.Fprint(b, "\n")
-	return b
+	return b.String()
+}
+
+// memoize makeRecord()
+func (r *AccessLogRecord) getRecord() string {
+	if r.record == "" {
+		r.record = r.makeRecord()
+	}
+
+	return r.record
 }
 
 func (r *AccessLogRecord) WriteTo(w io.Writer) (int64, error) {
-	recordBuffer := r.makeRecord()
+	recordBuffer := bytes.NewBufferString(r.getRecord())
 	return recordBuffer.WriteTo(w)
 }
 
@@ -98,8 +108,7 @@ func (r *AccessLogRecord) LogMessage() string {
 		return ""
 	}
 
-	recordBuffer := r.makeRecord()
-	return recordBuffer.String()
+	return r.getRecord()
 }
 
 func (r *AccessLogRecord) ExtraHeaders() string {
